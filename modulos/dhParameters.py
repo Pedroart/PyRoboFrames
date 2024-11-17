@@ -152,4 +152,4 @@ class dhParameters:
         Tiempo promedio de evaluación: 0.000062 segundos
         Tiempo mínimo de evaluación:   0.000057 segundos
         Tiempo máximo de evaluación:   0.000141 segundos
-    ''''''
+    '''

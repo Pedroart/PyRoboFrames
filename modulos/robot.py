@@ -9,7 +9,7 @@ class robot:
         self.params_dh = params_dh
         self.num_joints = params_dh.num_joints
         self._qsym = params_dh.q
-        self.q = np.array([0 for x in range(self.num_joints)])
+        self._q = np.array([0 for x in range(self.num_joints)])
         
         self._tWrist_symbolic = self._funCinematicaDirecta()
         self._tWrist_func = sp.lambdify(self._qsym, self._tWrist_symbolic, "numpy")
@@ -20,9 +20,24 @@ class robot:
 
         self.update()
 
+    @property
+    def q(self):
+        """
+        Getter para acceder al valor de q.
+        """
+        return self._q
+
+    @q.setter
+    def q(self, value):
+        """
+        Setter para actualizar el valor de q y realizar alguna acción.
+        """
+        self._q = value
+        self.update()
+
     def update(self):
-        self.tWrist = self._tWrist_func(*self.q)
-        self.jGWrist = self._jWrist_func(*self.q)
+        self.tWrist = self._tWrist_func(*self._q)
+        self.jGWrist = self._jWrist_func(*self._q)
         M = self.matrixEuler2Wel(self.tWrist[:3,:3])
         self.jAWrist = M @ self.jGWrist
         
@@ -97,7 +112,7 @@ class robot:
 
     # Creación del objeto
     ur5 = robot(dhp.dhParameters(theta, d, a, alpha, kind))
-    ur5.q = [0,0,3.14]
+    ur5._q = [0,0,3.14]
     ur5.update()
     print(ur5.jGWrist)
     print(ur5.jAWrist)'''
