@@ -1,6 +1,6 @@
 import sympy as sp
 import numpy as np
-import dhParameters as dhp
+from . import dhParameters as dhp
 from scipy.spatial.transform import Rotation as R
 
 class robot:
