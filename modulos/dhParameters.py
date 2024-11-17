@@ -57,18 +57,22 @@ class dhParameters:
                 f")")
     
     def dh_matrix(self, theta, d, a, alpha):
+        sth = sp.sin(theta)
+        cth = sp.cos(theta)
+        sa  = sp.sin(alpha)
+        ca  = sp.cos(alpha)
         return sp.Matrix([
-            [sp.cos(theta), -sp.sin(theta) * sp.cos(alpha), sp.sin(theta) * sp.sin(alpha), a * sp.cos(theta)],
-            [sp.sin(theta), sp.cos(theta) * sp.cos(alpha), -sp.cos(theta) * sp.sin(alpha), a * sp.sin(theta)],
-            [0, sp.sin(alpha), sp.cos(alpha), d],
-            [0, 0, 0, 1]
+            [cth, -ca*sth,  sa*sth, a*cth],
+            [sth,  ca*cth, -sa*cth, a*sth],
+            [0.0,      sa,      ca,     d],
+            [0.0,     0.0,     0.0,   1.0]
         ])
 
     def homogeneous_transform(self,n= None):
         if(n == None):
             n = self.num_joints
         
-        if not 0 < n <= self.num_joints:
+        if not (0 < n <= self.num_joints):
             erro = f'El parametro N debe estar dentro del rango [0:{self.num_joints}]'
             raise ValueError(erro)
 
@@ -77,7 +81,7 @@ class dhParameters:
         for i in range(n):
             theta, d, a, alpha = self.params_dh[i]
             T = T @ self.dh_matrix(theta, d, a, alpha)
-        return sp.sympify(T)
+        return T
 
 '''if __name__ == "__main__":
 
