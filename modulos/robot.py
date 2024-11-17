@@ -86,7 +86,7 @@ class robot:
         return J
         
 
-if __name__ == "__main__":
+'''if __name__ == "__main__":
 
     # Parámetros de ejemplo
     theta   = [0, 0, 0]
@@ -100,4 +100,4 @@ if __name__ == "__main__":
     ur5.q = [0,0,3.14]
     ur5.update()
     print(ur5.jGWrist)
-    print(ur5.jAWrist)
+    print(ur5.jAWrist)'''

@@ -79,7 +79,7 @@ class dhParameters:
             T = T @ self.dh_matrix(theta, d, a, alpha)
         return sp.sympify(T)
 
-if __name__ == "__main__":
+'''if __name__ == "__main__":
 
     # Parámetros de ejemplo
     theta   = [0, sp.pi/4, sp.pi/2]
@@ -142,16 +142,14 @@ if __name__ == "__main__":
     print(f"Tiempo mínimo de evaluación: {tiempo_minimo:.6f} segundos")
     print(f"Tiempo máximo de evaluación: {tiempo_maximo:.6f} segundos")
 
-    '''
+
     NumPy:
         Tiempo promedio de evaluación: 0.000213 segundos
         Tiempo mínimo de evaluación:   0.000128 segundos
         Tiempo máximo de evaluación:   0.000906 segundos
-    '''
-    
-    '''
+
     SmyPy
         Tiempo promedio de evaluación: 0.000062 segundos
         Tiempo mínimo de evaluación:   0.000057 segundos
         Tiempo máximo de evaluación:   0.000141 segundos
-    '''
+    ''''''

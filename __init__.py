@@ -1,4 +1,4 @@
-from modulos import *
+from .modulos import *
 
 # Informacion del paquete
 __version__ = "1.0.0"
