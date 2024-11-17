@@ -74,8 +74,8 @@ class dhParameters:
 
         T = np.eye(4)
 
-        for param in self.params_dh:
-            theta, d, a, alpha = param
+        for i in range(n):
+            theta, d, a, alpha = self.params_dh[i]
             T = T @ self.dh_matrix(theta, d, a, alpha)
         return sp.sympify(T)
 
