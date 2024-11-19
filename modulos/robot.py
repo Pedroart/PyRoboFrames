@@ -28,14 +28,14 @@ class robot:
         self._tWrist_symbolic = self._funCinematicaDirecta()
         self._tWrist_func = sp.lambdify(self._qsym, self._tWrist_symbolic, "numpy")
 
-        self._jGWrist_symbolic = self._funJacobianoGeometrio()
+        self._jGWrist_symbolic = self._funJacobianoGeometrioOpt()
         self._jGWrist_func = sp.lambdify(self._qsym, self._jGWrist_symbolic, "numpy")
     
 
         self.update()
 
     
-    #@timeit
+    @timeit
     def update(self):
         self.tWrist = self._tWrist_func(*self._q)
         self.jGWrist = self._jGWrist_func(*self._q)
@@ -123,10 +123,8 @@ class robot:
 
         T_list = [self.params_dh.homogeneous_transform(i + 1) for i in range(n)]
         z = [sp.Matrix([0, 0, 1])] + [T[:3, 2] for T in T_list]
-        p_n = T_list[-1][:3, 3]
+        p_n = T_list[-1][:3, 3] 
 
-        # Precomputar derivadas de p_n para reducir accesos y cálculos simbólicos
-        #J_linear = [p_n.jacobian([self._qsym[i]]) for i in range(n)]
         J_linear = [
             sp.trigsimp(p_n.jacobian([self._qsym[i]])) for i in range(n)
         ]
