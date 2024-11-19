@@ -117,6 +117,27 @@ class robot:
         #return sp.trigsimp(J_linear)
         return J_linear
 
+    def _funJacobianoGeometrioOpt(self, n=None):
+        if n is None:
+            n = self.num_joints
+
+        T_list = [self.params_dh.homogeneous_transform(i + 1) for i in range(n)]
+        z = [sp.Matrix([0, 0, 1])] + [T[:3, 2] for T in T_list]
+        p_n = T_list[-1][:3, 3]
+
+        # Precomputar derivadas de p_n para reducir accesos y cálculos simbólicos
+        #J_linear = [p_n.jacobian([self._qsym[i]]) for i in range(n)]
+        J_linear = [
+            sp.trigsimp(p_n.jacobian([self._qsym[i]])) for i in range(n)
+        ]
+
+
+        # Evitar crear más listas; construir directamente las filas del jacobiano
+        return sp.Matrix.vstack(
+            sp.Matrix.hstack(*J_linear),
+            sp.Matrix.hstack(*z[:n])
+        )
+
     #@timeit
     def quaternion_difference(_,q_current, q_target):
         """
