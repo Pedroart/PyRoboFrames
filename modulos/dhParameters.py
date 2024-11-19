@@ -19,6 +19,7 @@ class dhParameters:
             ValueError: Si los elementos de 'kind' no son 'R' o 'P'.
         """
         # Verifica que todas las listas tengan el mismo tamaño
+        self._cached_transforms = {}
         if not (len(theta) == len(d) == len(a) == len(alpha) == len(kind)):
             raise ValueError("Todas las listas deben tener el mismo tamaño.")
 
@@ -68,19 +69,32 @@ class dhParameters:
             [0.0,     0.0,     0.0,   1.0]
         ])
 
-    def homogeneous_transform(self,n= None):
-        if(n == None):
+    def homogeneous_transform(self, n=None):
+        if n is None:
             n = self.num_joints
-        
+
         if not (0 < n <= self.num_joints):
-            erro = f'El parametro N debe estar dentro del rango [0:{self.num_joints}]'
+            erro = f'El parametro N debe estar dentro del rango [1:{self.num_joints}]'
             raise ValueError(erro)
 
-        T = np.eye(4)
+        # Si ya calculamos T[n], devolver el valor almacenado
+        if n in self._cached_transforms:
+            return self._cached_transforms[n]
 
-        for i in range(n):
-            theta, d, a, alpha = self.params_dh[i]
-            T = T @ self.dh_matrix(theta, d, a, alpha)
+        # Si n=1, calculamos directamente
+        if n == 1:
+            theta, d, a, alpha = self.params_dh[0]
+            T = self.dh_matrix(theta, d, a, alpha)
+            self._cached_transforms[1] = T  # Cacheamos el resultado
+            return T
+
+        # Si n>1, calculamos T[n-1] (reutilizamos la caché) y multiplicamos
+        T_prev = self.homogeneous_transform(n - 1)
+        theta, d, a, alpha = self.params_dh[n - 1]
+        T = T_prev @ self.dh_matrix(theta, d, a, alpha)
+
+        # Cacheamos T[n] y lo devolvemos
+        self._cached_transforms[n] = T
         return T
 
 '''if __name__ == "__main__":

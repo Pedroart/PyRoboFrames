@@ -25,12 +25,14 @@ class robot:
         self._qsym = params_dh.q
         self._q = np.array([0 for x in range(self.num_joints)])
         
+        print('Inicio Precalculo de Variables')
         self._tWrist_symbolic = self._funCinematicaDirecta()
         self._tWrist_func = sp.lambdify(self._qsym, self._tWrist_symbolic, "numpy")
 
-        self._jGWrist_symbolic = self._funJacobianoGeometrio()
+        self._jGWrist_symbolic = self._funJacobianoGeometrioOpt()
         self._jGWrist_func = sp.lambdify(self._qsym, self._jGWrist_symbolic, "numpy")
-    
+        print('Fin de Precalculo de Variables')
+        
 
         self.update()
 
@@ -39,7 +41,7 @@ class robot:
     def update(self):
         self.tWrist = self._tWrist_func(*self._q)
         self.jGWrist = self._jGWrist_func(*self._q)
-        self.pose = self.TF2xyzquat(self.tWrist)
+        #self.pose = self.TF2xyzquat(self.tWrist)
 
     
     def TF2xyzquat(_,T):
@@ -100,7 +102,8 @@ class robot:
     
     def _funCinematicaDirecta(self, n=None):
         T_total = self.params_dh.homogeneous_transform(n)
-        return T_total
+
+        return sp.trigsimp(T_total)
 
     
     def _funJacobianoGeometrio(self, n=None):
@@ -126,6 +129,27 @@ class robot:
         J_angular = z[:n]
         return sp.Matrix.vstack(sp.Matrix.hstack(*J_linear), sp.Matrix.hstack(*J_angular))
     
+    def _funJacobianoGeometrioOpt(self, n=None):
+        if n is None:
+            n = self.num_joints
+
+        T_list = [self.params_dh.homogeneous_transform(i + 1) for i in range(n)]
+        z = [sp.Matrix([0, 0, 1])] + [T[:3, 2] for T in T_list]
+        p_n = T_list[-1][:3, 3]
+
+        # Precomputar derivadas de p_n para reducir accesos y cálculos simbólicos
+        #J_linear = [p_n.jacobian([self._qsym[i]]) for i in range(n)]
+        J_linear = [
+            sp.trigsimp(p_n.jacobian([self._qsym[i]])) for i in range(n)
+        ]
+
+
+        # Evitar crear más listas; construir directamente las filas del jacobiano
+        return sp.Matrix.vstack(
+            sp.Matrix.hstack(*J_linear),
+            sp.Matrix.hstack(*z[:n])
+        )
+
     @timeit
     def quaternion_difference(_,q_current, q_target):
         """
