@@ -25,20 +25,39 @@ class robot:
         self._qsym = params_dh.q
         self._q = np.array([0 for x in range(self.num_joints)])
         
-        self._tWrist_symbolic = self._funCinematicaDirecta()
-        self._tWrist_func = sp.lambdify(self._qsym, self._tWrist_symbolic, "numpy")
+        sin_q = [sp.Symbol(f'sin_q{i+1}') for i in range(self.num_joints)]
+        cos_q = [sp.Symbol(f'cos_q{i+1}') for i in range(self.num_joints)]
 
-        self._jGWrist_symbolic = self._funJacobianoGeometrioOpt()
-        self._jGWrist_func = sp.lambdify(self._qsym, self._jGWrist_symbolic, "numpy")
-    
+        self.new_inputs = sin_q + cos_q
+        subs_dict = {
+            trig: val
+            for i in range(self.num_joints)
+            for trig, val in zip([sp.sin(self._qsym[i]), sp.cos(self._qsym[i])], [sin_q[i], cos_q[i]])
+        }
+
+        self._tWrist_symbolic = self._funCinematicaDirecta().subs(subs_dict)
+        self._tWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic, "numpy")
+
+        self._jGWrist_symbolic = self._funJacobianoGeometrioOpt().subs(subs_dict)
+        print(self._jGWrist_symbolic)
+        self._jGWrist_func = sp.lambdify(self.new_inputs, self._jGWrist_symbolic, "numpy")
+        print(self._jGWrist_func)
 
         self.update()
 
-    
+    def _compute_trig_inputs(self,q=None):
+        if q is None:
+            q = self._q
+        sin_values = [np.sin(angle) for angle in q]  # Calcula sin(q_i) para cada q_i
+        cos_values = [np.cos(angle) for angle in q]  # Calcula cos(q_i) para cada q_i
+        return sin_values + cos_values  # Concatenar sinos y cosenos
+
     @timeit
     def update(self):
-        self.tWrist = self._tWrist_func(*self._q)
-        self.jGWrist = self._jGWrist_func(*self._q)
+        self._inputs = self._compute_trig_inputs()
+        self.tWrist = self._tWrist_func(*self._inputs)
+        self._inputs = self._compute_trig_inputs()
+        self.jGWrist = self._jGWrist_func(*self._inputs)
         self.pose = self.TF2xyzquat(self.tWrist)
 
     
@@ -126,7 +145,7 @@ class robot:
         p_n = T_list[-1][:3, 3] 
 
         J_linear = [
-            sp.trigsimp(p_n.jacobian([self._qsym[i]])) for i in range(n)
+            p_n.jacobian([self._qsym[i]]) for i in range(n)
         ]
 
 
@@ -161,7 +180,7 @@ class robot:
 
         return q_diff
 
-    #@timeit
+    @timeit
     def jacobian_quar(self, q, delta=0.0001):
         """
         Jacobiano analitico para la posicion. Retorna una matriz de 3x6 y toma como
@@ -180,7 +199,7 @@ class robot:
             # Incrementar la articulacion i-esima usando un delta
             dq[i] = dq[i] + delta
             # Transformacion homogenea luego del incremento (q+dq)
-            Td = self._tWrist_func(*dq)
+            Td = self._tWrist_func(*self._compute_trig_inputs(dq))
             # Aproximacion del Jacobiano de posicion usando diferencias	finitas
             Ji_p = (Td[0:3,3] - T[0:3,3])/delta
             
