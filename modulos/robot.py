@@ -39,10 +39,8 @@ class robot:
         self._tWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic, "numpy")
 
         self._jGWrist_symbolic = self._funJacobianoGeometrioOpt().subs(subs_dict)
-        print(self._jGWrist_symbolic)
         self._jGWrist_func = sp.lambdify(self.new_inputs, self._jGWrist_symbolic, "numpy")
-        print(self._jGWrist_func)
-
+        
         self.update()
 
     def _compute_trig_inputs(self,q=None):
@@ -51,6 +49,7 @@ class robot:
         sin_values = [np.sin(angle) for angle in q]  # Calcula sin(q_i) para cada q_i
         cos_values = [np.cos(angle) for angle in q]  # Calcula cos(q_i) para cada q_i
         return sin_values + cos_values  # Concatenar sinos y cosenos
+
 
     @timeit
     def update(self):
@@ -224,8 +223,8 @@ class robot:
         
         dq = np.tile(q, (self.num_joints, 1))  # Crear una copia para cada articulación
         dq[np.arange(self.num_joints), np.arange(self.num_joints)] += delta  # Incrementar
-
-        Td_all = np.array([self._tWrist_func(*dq_i) for dq_i in dq])  # Transformaciones en paralelo
+        
+        Td_all = np.array([self._tWrist_func(*self._compute_trig_inputs(dq_i)) for dq_i in dq])  # Transformaciones en paralelo
         
         
         quats_perturbed = np.array([R.from_matrix(Td[0:3, 0:3]).as_quat() for Td in Td_all])
@@ -257,7 +256,7 @@ class robot:
     @timeit
     def ikine_quar(self,xdes):
         epsilon = 0.001 # Tolerancia para la convergencia
-        max_iter = 1000  # Número máximo de iteraciones
+        max_iter = 10000  # Número máximo de iteraciones
         
         q = self._q.astype(float) 
 
@@ -348,7 +347,7 @@ class robot:
             self._q = q
             self.update()
             
-            if np.linalg.norm(error[:3]) < epsilon:
+            if np.linalg.norm(error) < epsilon:
                 print('Error Minimo')
                 break
         return q

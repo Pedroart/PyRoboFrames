@@ -25,7 +25,3 @@ if __name__ == "__main__":
 
 
     UR5 = robot(dh_params,q_lim)
-    UR5.update()
-    UR5.update()
-    UR5.update()
-    UR5.jacobian_quar(UR5._q)
