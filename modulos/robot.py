@@ -55,8 +55,10 @@ class robot:
     def update(self):
         self._inputs = self._compute_trig_inputs()
         self.tWrist = self._tWrist_func(*self._inputs)
+
         self._inputs = self._compute_trig_inputs()
         self.jGWrist = self._jGWrist_func(*self._inputs)
+        
         self.pose = self.TF2xyzquat(self.tWrist)
 
     
@@ -337,7 +339,7 @@ class robot:
             q_target = xdes[3:] / np.linalg.norm(xdes[3:])
             e_o = self.quaternion_difference(q_current, q_target)
 
-            error = np.concatenate((-e_pos,e_o))
+            error = np.concatenate((-e_pos,1.5*e_o))
 
             J12 = self.jacobian_quar_optimized(q)
             J_tasks = [J12[:3,:],J12[3:,:]]
@@ -347,7 +349,7 @@ class robot:
             self._q = q
             self.update()
             
-            if np.linalg.norm(error) < epsilon:
+            if np.linalg.norm(error[:3]) < epsilon:
                 print('Error Minimo')
                 break
         return q

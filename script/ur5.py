@@ -25,3 +25,6 @@ if __name__ == "__main__":
 
 
     UR5 = robot(dh_params,q_lim)
+
+    E=UR5.matrixEuler2Wel(*UR5.asEuler(UR5.tWrist[:3,:3]))
+    JA = E @ UR5.jGWrist
