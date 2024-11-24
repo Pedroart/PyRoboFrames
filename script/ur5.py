@@ -25,9 +25,14 @@ if __name__ == "__main__":
 
 
     UR5 = robot(dh_params,q_lim)
+    RPYActual = UR5.asEuler(UR5.tWrist[:3, :3])
+    XYZActual = UR5.tWrist[:3, 3]
 
-    RPYDES = np.array([1.57,0,0])
-    XYZDES = np.array([0.3,0.0,0.3])
+    print(f'PRY: {RPYActual}')
+    print(f'XYZ: {XYZActual}')
+
+    RPYDES = np.array([0,0,1.57])
+    XYZDES = np.array([-0.70,-0.19,-0.005])
     E=UR5.matrixEuler2Wel(*UR5.asEuler(UR5.tWrist[:3,:3]))
     JA = E @ UR5.jGWrist
     
@@ -37,7 +42,7 @@ if __name__ == "__main__":
     # Parámetros de tolerancia
     epsilon_xyz = 1e-3  # Tolerancia para posición
     epsilon_rpy = 1e-1  # Tolerancia para orientación
-    max_iterations = 1000
+    max_iterations = 100
     alpha = 10.0  # Tasa de aprendizaje
 
     # Inicialización
