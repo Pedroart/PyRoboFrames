@@ -26,5 +26,55 @@ if __name__ == "__main__":
 
     UR5 = robot(dh_params,q_lim)
 
+    RPYDES = np.array([1.57,0,0])
+    XYZDES = np.array([0.3,0.0,0.3])
     E=UR5.matrixEuler2Wel(*UR5.asEuler(UR5.tWrist[:3,:3]))
     JA = E @ UR5.jGWrist
+    
+    RPYActual = UR5.asEuler(UR5.tWrist[:3,:3])
+    XYZActual = [UR5.tWrist[:3,3]]
+
+    # Parámetros de tolerancia
+    epsilon_xyz = 1e-3  # Tolerancia para posición
+    epsilon_rpy = 1e-1  # Tolerancia para orientación
+    max_iterations = 1000
+    alpha = 10.0  # Tasa de aprendizaje
+
+    # Inicialización
+    q = np.zeros(UR5.num_joints)  # Configuración inicial (típicamente en el rango de las q_lim)
+
+    for iteration in range(max_iterations):
+
+        # Calcula la pose actual
+        UR5._q = q  # Actualiza el robot con las nuevas articulaciones
+        UR5.update()
+
+        RPYActual = UR5.asEuler(UR5.tWrist[:3, :3])
+        XYZActual = UR5.tWrist[:3, 3]
+
+        print(f'PRY: {RPYActual}')
+        print(f'XYZ: {XYZActual}')
+        # Calcula los errores
+        e_xyz = XYZDES - XYZActual
+        e_rpy = RPYDES - RPYActual
+
+        # Verifica la convergencia
+        if np.linalg.norm(e_xyz) < epsilon_xyz  and np.linalg.norm(e_rpy) < epsilon_rpy:
+            print(f"Convergencia alcanzada en iteración {iteration}")
+            break
+
+        # Calcula el jacobiano analítico
+        E = UR5.matrixEuler2Wel(*RPYActual)  # Matriz de conversión para orientación
+        JA = E @ UR5.jGWrist  # Jacobiano analítico
+
+        # Calcula el ajuste de q
+        error = np.concatenate((e_xyz,0.1*e_rpy))
+        delta_q = np.linalg.pinv(JA) @ error  # Pseudo-inversa para resolver el gradiente
+
+        # Actualiza las articulaciones
+        q = q + delta_q
+
+    else:
+        print("No se alcanzó convergencia dentro del número máximo de iteraciones.")
+
+    print("Configuración final de articulaciones:", q)
