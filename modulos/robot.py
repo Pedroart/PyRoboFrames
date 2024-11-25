@@ -270,7 +270,7 @@ class robot:
         delta_thetas = (theta_array2 - theta_array1 + np.pi) % (2 * np.pi) - np.pi
         return delta_thetas
 
-    @timeit
+    #@timeit
     def generalized_task_augmentation(self,q, J_tasks, errors, deltaT=1, u=np.sqrt(0.001)):
         P = np.eye(len(q))
         q_dot = np.zeros(len(q))
@@ -288,6 +288,7 @@ class robot:
         max_iter = 100  # Número máximo de iteraciones
         
         qin = self._q.astype(float) 
+        print(qin)
         q = self._q.astype(float) 
 
         for i in range(max_iter):
@@ -299,7 +300,7 @@ class robot:
 
             J_tasks = [self.jLWrist,self.jLElbow]
             errors = [e_pos,e_securiti]
-            q, qd = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=1)
+            q, qd = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=0.01)
             self._q = q
             self.update()
 
@@ -308,10 +309,13 @@ class robot:
                 print('Error Minimo')
                 break
         
-        self._q += self.shortest_angular_distances(qin,self._q)
+        self._q = self.shortest_angular_distances(qin,self._q)
         self.update()
 
-        send(self._q) 
+        if send is not None:
+            send(self._q) 
+        
+        print(self._q)
         return self._q
     
 
