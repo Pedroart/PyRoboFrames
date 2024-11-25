@@ -25,7 +25,7 @@ class robot:
         self.params_dh = params_dh
         self.num_joints = params_dh.num_joints
         self._qsym = params_dh.q
-        self._q = np.array([0 for x in range(self.num_joints)])
+        self._q = np.array([0 for x in range(self.num_joints)]).astype(float) 
         
         sin_q = [sp.Symbol(f'sin_q{i+1}') for i in range(self.num_joints)]
         cos_q = [sp.Symbol(f'cos_q{i+1}') for i in range(self.num_joints)]
@@ -37,13 +37,27 @@ class robot:
             for trig, val in zip([sp.sin(self._qsym[i]), sp.cos(self._qsym[i])], [sin_q[i], cos_q[i]])
         }
 
-        self._tWrist_symbolic = self._funCinematicaDirecta().subs(subs_dict)
+        
+        self._tElbow_symbolic = self._funCinematicaDirecta(2).subs(subs_dict)
+        self._tElbow_func = sp.lambdify(self.new_inputs, self._tElbow_symbolic, "numpy")
+
+        # Separar las componentes lineales y de orientación
+        self._tLElbow_func = sp.lambdify(self.new_inputs, self._tElbow_symbolic[0:3, 3], "numpy")  # Posición del codo
+        self._tOElbow_func = sp.lambdify(self.new_inputs, self._tElbow_symbolic[0:3, 0:3], "numpy")  # Orientación del codo
+
+        # Jacobiano lineal hasta la articulación 3
+        self._jLElbow_symbolic = self._funJacobianoLineal(2).subs(subs_dict)
+        self._jLElbow_func = sp.lambdify(self.new_inputs, self._jLElbow_symbolic, "numpy")
+
+
+
+        self._tWrist_symbolic = self._funCinematicaDirecta(4).subs(subs_dict)
         self._tWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic, "numpy")
 
         self._tLWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic[0:3,3], "numpy")
         self._tOWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic[0:3,0:3], "numpy")
 
-        self._jLWrist_symbolic = self._funJacobianoLineal().subs(subs_dict)
+        self._jLWrist_symbolic = self._funJacobianoLineal(4).subs(subs_dict)
         self._jLWrist_func = sp.lambdify(self.new_inputs, self._jLWrist_symbolic, "numpy")
         
         self.update()
@@ -57,18 +71,29 @@ class robot:
         return np.concatenate((sin_values, cos_values))  # Concatenar sinos y cosenos
 
 
-    @timeit
+    #@timeit
     def update(self):
         self._inputs = self._compute_trig_inputs()
         #self.tWrist = self._tWrist_func(*self._inputs)
-        self.tLWrist = self._tLWrist_func(*self._inputs)
-        self.tOWrist = self._tOWrist_func(*self._inputs)
+        self.tLWrist = self._tLWrist_func(*self._inputs).T[0]
+        #self.tOWrist = self._tOWrist_func(*self._inputs)
 
         self.jLWrist = self._jLWrist_func(*self._inputs)
 
-        self.pose = self.TF2xyzquat()
+        #self.pose = self.TF2xyzquat()
         
-        self.jCWrist = self.jacobian_quar_optimized()
+        #self.jCWrist = self.jacobian_quar_optimized()
+
+        
+        #self.tWrist = self._tWrist_func(*self._inputs)
+        self.tLElbow = self._tLElbow_func(*self._inputs).T[0]
+        #self.tOWrist = self._tOWrist_func(*self._inputs)
+
+        self.jLElbow = self._jLElbow_func(*self._inputs)
+
+        #self.pose = self.TF2xyzquat()
+        
+        #self.jCWrist = self.jacobian_quar_optimized()
         
 
     def TF2xyzquat(self):
@@ -83,8 +108,9 @@ class robot:
             is Cartesian coordinates and the last part is a quaternion
         """
         quat = R.from_matrix(self.tOWrist).as_quat()
-        res = [self.tLWrist[0][0], self.tLWrist[1][0], self.tLWrist[2][0], quat[0], quat[1], quat[2], quat[3]]
-        print(res)
+        print(self.tLWrist)
+        res = [self.tLWrist[0], self.tLWrist[1], self.tLWrist[2], quat[0], quat[1], quat[2], quat[3]]
+        
         return np.array(res)
 
     
@@ -112,12 +138,13 @@ class robot:
         if n is None:
             n = self.num_joints
 
+        J_linear = sp.zeros(3, self.num_joints)
         # Posición del extremo en función de las articulaciones
-        p_n = self.params_dh.homogeneous_transform()[:3, 3]
+        p_n = self.params_dh.homogeneous_transform(n)[:3, 3]
 
         # Usar jacobiano simbólico en lugar de diferenciar en bucle
         qsym_mat = sp.Matrix(self._qsym[:n])
-        J_linear = p_n.jacobian(qsym_mat)
+        J_linear[:, :n] = p_n.jacobian(qsym_mat)
         #return sp.trigsimp(J_linear)
         return J_linear
 
@@ -196,7 +223,7 @@ class robot:
                 break
         return q
 
-    #@timeit
+    @timeit
     def ikine_position(self,xdes):
         epsilon = 0.0001  # Tolerancia para la convergencia
         max_iter = 100  # Número máximo de iteraciones
@@ -205,32 +232,51 @@ class robot:
 
         for i in range(max_iter):
             
-            xcurr = self.tWrist[:3,3]
+            xcurr = self.tLWrist
             error = xdes - xcurr
             
-            dq = np.dot(np.linalg.pinv(self.jLWrist[:3,:]) , error)
-            q = self.limit_joint_pos(q+dq)
-            self._q = q
+            dq = np.dot(np.linalg.pinv(self.jLWrist) , error)
+            self._q += dq
+            print(dq)
+            print(self._q)
             self.update()
 
             if np.linalg.norm(error) < epsilon:
                 print('Error Minimo')
                 break
 
-            print(xcurr)
+            
            
             
-        return q
+        return self._q
 
     def regularized_pseudoinverse(self,J, u=np.sqrt(0.001)):
         return J.T @ np.linalg.inv(J @ J.T + u**2 * np.eye(J.shape[0]))
 
+    def shortest_angular_distances(_,theta_array1, theta_array2):
+        """
+        Calcula la diferencia angular más corta entre múltiples pares de ángulos en radianes usando numpy.
+
+        Args:
+            theta_array1 (numpy.ndarray): Array de ángulos iniciales en radianes.
+            theta_array2 (numpy.ndarray): Array de ángulos finales en radianes.
+
+        Returns:
+            numpy.ndarray: Array de diferencias angulares más cortas para cada par en radianes.
+        """
+        if theta_array1.shape != theta_array2.shape:
+            raise ValueError("Los arrays de ángulos deben tener la misma forma.")
+        
+        delta_thetas = (theta_array2 - theta_array1 + np.pi) % (2 * np.pi) - np.pi
+        return delta_thetas
+
+    @timeit
     def generalized_task_augmentation(self,q, J_tasks, errors, deltaT=1, u=np.sqrt(0.001)):
         P = np.eye(len(q))
         q_dot = np.zeros(len(q))
         
         for J, r_dot in zip(J_tasks, errors):
-            Ji_hash = self.regularized_pseudoinverse(J, u)
+            Ji_hash = np.linalg.pinv(J)
             q_dot += P @ Ji_hash @ r_dot
             P = P @ (np.eye(len(q)) - Ji_hash @ J)
 
@@ -239,37 +285,34 @@ class robot:
     @timeit
     def ikine_task(self,xdes,send = None):
         epsilon = 0.001 # Tolerancia para la convergencia
-        max_iter = 1000  # Número máximo de iteraciones
+        max_iter = 100  # Número máximo de iteraciones
         
+        qin = self._q.astype(float) 
         q = self._q.astype(float) 
 
         for i in range(max_iter):
             
 
-            e_pos = self.pose[0:3]-xdes[0:3]
-            # Error de orientación (normalizar cuaterniones)
-            q_current = self.pose[3:] / np.linalg.norm(self.pose[3:])
-            q_target = xdes[3:] / np.linalg.norm(xdes[3:])
-            e_o = self.quaternion_difference(q_current, q_target)
+            e_pos = xdes - self.tLWrist
+            e_securiti = np.array([0,0, 0.5 - self.tLElbow[2]])
+            error = np.concatenate((e_pos,e_securiti))
 
-            error = np.concatenate((-e_pos,e_o))
-
-            J_tasks = [self.jLWrist,self.jCWrist]
-            errors = [10*error[:3], 1.5*error[3:]]
-
-            q, _ = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=0.01)
+            J_tasks = [self.jLWrist,self.jLElbow]
+            errors = [e_pos,e_securiti]
+            q, qd = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=1)
             self._q = q
-            
             self.update()
+
             
-            if np.linalg.norm(error[0:3]) < epsilon:
+            if np.linalg.norm(error) < epsilon:
                 print('Error Minimo')
                 break
-            if np.linalg.norm(error[0:3]) < epsilon*2:
-                if send is not None:
-                    send(q)
+        
+        self._q += self.shortest_angular_distances(qin,self._q)
+        self.update()
 
-        return q
+        send(self._q) 
+        return self._q
     
 
     ##########################
