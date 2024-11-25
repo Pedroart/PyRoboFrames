@@ -5,6 +5,8 @@ from scipy.spatial.transform import Rotation as R
 from pyquaternion import Quaternion
 from copy import copy
 import time
+from concurrent.futures import ThreadPoolExecutor
+
 
 def timeit(func):
     def wrapper(*args, **kwargs):
@@ -38,31 +40,38 @@ class robot:
         self._tWrist_symbolic = self._funCinematicaDirecta().subs(subs_dict)
         self._tWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic, "numpy")
 
+        self._tLWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic[0:3,3], "numpy")
+        self._tOWrist_func = sp.lambdify(self.new_inputs, self._tWrist_symbolic[0:3,0:3], "numpy")
+
         self._jLWrist_symbolic = self._funJacobianoLineal().subs(subs_dict)
         self._jLWrist_func = sp.lambdify(self.new_inputs, self._jLWrist_symbolic, "numpy")
         
         self.update()
 
+    
     def _compute_trig_inputs(self,q=None):
         if q is None:
             q = self._q
-        sin_values = [np.sin(angle) for angle in q]  # Calcula sin(q_i) para cada q_i
-        cos_values = [np.cos(angle) for angle in q]  # Calcula cos(q_i) para cada q_i
-        return sin_values + cos_values  # Concatenar sinos y cosenos
+        sin_values = np.sin(q)  # Vectorizado
+        cos_values = np.cos(q)  # Vectorizado
+        return np.concatenate((sin_values, cos_values))  # Concatenar sinos y cosenos
 
 
     @timeit
     def update(self):
         self._inputs = self._compute_trig_inputs()
-        self.tWrist = self._tWrist_func(*self._inputs)
+        #self.tWrist = self._tWrist_func(*self._inputs)
+        self.tLWrist = self._tLWrist_func(*self._inputs)
+        self.tOWrist = self._tOWrist_func(*self._inputs)
 
-        self._inputs = self._compute_trig_inputs()
         self.jLWrist = self._jLWrist_func(*self._inputs)
-        
-        self.pose = self.TF2xyzquat(self.tWrist)
 
-    
-    def TF2xyzquat(_,T):
+        self.pose = self.TF2xyzquat()
+        
+        self.jCWrist = self.jacobian_quar_optimized()
+        
+
+    def TF2xyzquat(self):
         """
         Convert a homogeneous transformation matrix into the a vector containing the
         pose of the robot.
@@ -73,8 +82,9 @@ class robot:
         X -- A pose vector in the format [x y z ex ey ez ew], donde la first part
             is Cartesian coordinates and the last part is a quaternion
         """
-        quat = R.from_matrix(T[0:3,0:3]).as_quat()
-        res = [T[0,3], T[1,3], T[2,3], quat[0], quat[1], quat[2], quat[3]]
+        quat = R.from_matrix(self.tOWrist).as_quat()
+        res = [self.tLWrist[0][0], self.tLWrist[1][0], self.tLWrist[2][0], quat[0], quat[1], quat[2], quat[3]]
+        print(res)
         return np.array(res)
 
     
@@ -112,7 +122,7 @@ class robot:
         return J_linear
 
 
-    #@timeit
+    @timeit
     def quaternion_difference(_,q_current, q_target):
         """
         Calcula la diferencia entre un cuaternión actual y un objetivo.
@@ -128,39 +138,39 @@ class robot:
             Diferencia de cuaterniones en formato [x, y, z, w].
         """
         # Crear rotaciones desde cuaterniones
-        r_current = R.from_quat(q_current)
-        r_target = R.from_quat(q_target)
 
         # Calcular el cuaternión de diferencia
-        r_diff = r_target * r_current.inv()
-        q_diff = r_diff.as_quat()  # En formato [x, y, z, w]
+        #r_diff = 
+        #q_diff = r_diff.as_quat()  # En formato [x, y, z, w]
+
+        return (R.from_quat(q_target) * R.from_quat(q_current).inv()).as_quat()
+
+    @timeit
+    def _quaternion_difference(_,r_current, r_target):
+        r_diff = np.dot(r_target, np.linalg.inv(r_current))
+        q_diff = R.from_matrix(r_diff).as_quat()  # En formato [x, y, z, w]
 
         return q_diff
-
     
     @timeit
-    def jacobian_quar_optimized(self, q, delta=0.0001):
-        J = np.zeros((7, self.num_joints))
-        T = self.tWrist
-        quat_current = R.from_matrix(T[0:3, 0:3]).as_quat()
+    def jacobian_quar_optimized(self, delta=0.0001):
         
-        dq = np.tile(q, (self.num_joints, 1))  # Crear una copia para cada articulación
+        quat_current = self.pose[3:]
+        
+        dq = np.tile(self._q, (self.num_joints, 1)).astype(np.float64)  # Crear una copia para cada articulación
         dq[np.arange(self.num_joints), np.arange(self.num_joints)] += delta  # Incrementar
         
-        Td_all = np.array([self._tWrist_func(*self._compute_trig_inputs(dq_i)) for dq_i in dq])  # Transformaciones en paralelo
+        Td_all = np.array([self._tOWrist_func(*self._compute_trig_inputs(dq_i)) for dq_i in dq])  # Transformaciones
         
+        quats_perturbed = R.from_matrix(Td_all[:, 0:3, 0:3] ).as_quat()  # Efficient batch conversion
+        quat_diffs = (quats_perturbed - quat_current) / delta  # Assuming quaternion_difference is subtraction
         
-        quats_perturbed = np.array([R.from_matrix(Td[0:3, 0:3]).as_quat() for Td in Td_all])
-        quat_diffs = np.array([self.quaternion_difference(quat_current, q_p) for q_p in quats_perturbed]) / delta
-        
-        J[0:3, :] = self.jLWrist[0:3,:]
-        J[3:, :] = quat_diffs.T
-        return J
+        return quat_diffs.T
     
     @timeit
     def ikine_quar(self,xdes):
-        epsilon = 0.001 # Tolerancia para la convergencia
-        max_iter = 10000  # Número máximo de iteraciones
+        epsilon = 1e-3 # Tolerancia para la convergencia
+        max_iter = 1e3  # Número máximo de iteraciones
         
         q = self._q.astype(float) 
 
@@ -169,13 +179,13 @@ class robot:
 
             e_pos = self.pose[0:3]-xdes[0:3]
             # Error de orientación (normalizar cuaterniones)
-            q_current = self.pose[3:] / np.linalg.norm(self.pose[3:])
-            q_target = xdes[3:] / np.linalg.norm(xdes[3:])
+            q_current = self.pose[3:]
+            q_target = xdes[3:]
             e_o = self.quaternion_difference(q_current, q_target)
 
             error = np.concatenate((-e_pos,0.1*e_o))
             
-            dq = np.dot(np.linalg.pinv(self.jacobian_quar_optimized(q)) , error)
+            dq = np.dot(np.linalg.pinv(  np.vstack((self.jLWrist,self.jCWrist))   ) , error)
             q = q+dq
             self._q = q
             self.update()
@@ -204,6 +214,7 @@ class robot:
             self.update()
 
             if np.linalg.norm(error) < epsilon:
+                print('Error Minimo')
                 break
 
             print(xcurr)
@@ -226,7 +237,7 @@ class robot:
         return q + q_dot * deltaT, q_dot
     
     @timeit
-    def ikine_task(self,xdes):
+    def ikine_task(self,xdes,send = None):
         epsilon = 0.001 # Tolerancia para la convergencia
         max_iter = 1000  # Número máximo de iteraciones
         
@@ -241,19 +252,23 @@ class robot:
             q_target = xdes[3:] / np.linalg.norm(xdes[3:])
             e_o = self.quaternion_difference(q_current, q_target)
 
-            error = np.concatenate((-e_pos,1.5*e_o))
+            error = np.concatenate((-e_pos,e_o))
 
-            J12 = self.jacobian_quar_optimized(q)
-            J_tasks = [J12[:3,:],J12[3:,:]]
-            errors = [10*error[:3], error[3:]]
+            J_tasks = [self.jLWrist,self.jCWrist]
+            errors = [10*error[:3], 1.5*error[3:]]
 
             q, _ = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=0.01)
             self._q = q
+            
             self.update()
             
-            if np.linalg.norm(error[:3]) < epsilon:
+            if np.linalg.norm(error[0:3]) < epsilon:
                 print('Error Minimo')
                 break
+            if np.linalg.norm(error[0:3]) < epsilon*2:
+                if send is not None:
+                    send(q)
+
         return q
     
 

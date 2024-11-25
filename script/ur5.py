@@ -25,13 +25,10 @@ if __name__ == "__main__":
 
 
     UR5 = robot(dh_params,q_lim)
-    RPYActual = UR5.asEuler(UR5.tWrist[:3, :3])
-    XYZActual = UR5.tWrist[:3, 3]
 
-    print(f'PRY: {RPYActual}')
-    print(f'XYZ: {XYZActual}')
+    UR5.ikine_task(np.array([-0.79,-0.19,-0.005, 0, 1, 0, 0]))
 
-    RPYDES = np.array([0,0,1.57])
+'''    RPYDES = np.array([0,0,1.57])
     XYZDES = np.array([-0.70,-0.19,-0.005])
     E=UR5.matrixEuler2Wel(*UR5.asEuler(UR5.tWrist[:3,:3]))
     JA = E @ UR5.jGWrist
@@ -82,4 +79,4 @@ if __name__ == "__main__":
     else:
         print("No se alcanzó convergencia dentro del número máximo de iteraciones.")
 
-    print("Configuración final de articulaciones:", q)
+    print("Configuración final de articulaciones:", q)'''
