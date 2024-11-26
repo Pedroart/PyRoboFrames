@@ -39,16 +39,16 @@ class robot:
         }
 
         # ###############
-        # Elbow
+        # EndEfector
         # ###############        
-        self._tElbow_symbolic = self.__funCinematicaDirecta(2).subs(subs_dict)
-        self._tElbow_func = sp.lambdify(self.__new_inputs, self._tElbow_symbolic, "numpy")
+        self._tEndEfector_symbolic = self.__funCinematicaDirecta().subs(subs_dict)
+        self._tEndEfector_func = sp.lambdify(self.__new_inputs, self._tEndEfector_symbolic, "numpy")
 
-        self._tLElbow_func = sp.lambdify(self.__new_inputs, self._tElbow_symbolic[0:3, 3], "numpy")  # Posición del codo
-        self._tOElbow_func = sp.lambdify(self.__new_inputs, self._tElbow_symbolic[0:3, 0:3], "numpy")  # Orientación del codo
+        self._tLEndEfector_func = sp.lambdify(self.__new_inputs, self._tEndEfector_symbolic[0:3, 3], "numpy")  # Posición del codo
+        self._tOEndEfector_func = sp.lambdify(self.__new_inputs, self._tEndEfector_symbolic[0:3, 0:3], "numpy")  # Orientación del codo
 
-        self._jLElbow_symbolic = self.__funJacobianoLineal(2).subs(subs_dict)
-        self._jLElbow_func = sp.lambdify(self.__new_inputs, self._jLElbow_symbolic, "numpy")
+        self._jLEndEfector_symbolic = self.__funJacobianoLineal().subs(subs_dict)
+        self._jLEndEfector_func = sp.lambdify(self.__new_inputs, self._jLEndEfector_symbolic, "numpy")
 
         # ###############
         # Wrist
@@ -72,8 +72,23 @@ class robot:
         self.tLWrist = self._tLWrist_func(*self._inputs).T[0]
         self.jLWrist = self._jLWrist_func(*self._inputs)
 
-        self.tLElbow = self._tLElbow_func(*self._inputs).T[0]
-        self.jLElbow = self._jLElbow_func(*self._inputs)
+        self.tLEndEfector = self._tLEndEfector_func(*self._inputs).T[0]
+        self.jLEndEfector = self._jLEndEfector_func(*self._inputs)
+
+    def limit_joint_pos(self):
+        """
+        Delimita los valores articulares a los limites articulares del UR5
+        """
+        
+        #Verifica si cada valor articular esta dentro de sus limites
+        for i in range(6):
+            if self._q[i] < self._q_lim[i,0]:
+                self._q[i] = self._q_lim[i,0]
+            elif self._q[i] > self._q_lim[i,1]:
+                self._q[i] = self._q_lim[i,1]
+            else:
+                pass
+
 
     def __compute_trig_inputs(self,q=None):
         if q is None:
@@ -93,24 +108,53 @@ class robot:
 
         return q_dot
 
-    @timeit
+    #@timeit
     def ikine_task(self,xdes,funSend = None):
-        epsilon = [1e-3] # Tolerancia para la convergencia
+        epsilon = [1e-3,1e-3] # Tolerancia para la convergencia
         max_iter = 1000  # Número máximo de iteraciones
         
         for i in range(max_iter):
+            
+
+            epos = xdes - self.tLWrist
+
+            # Limitar el módulo a 0.1
+            modulo = np.linalg.norm(epos)  # Calcula el módulo
+            if modulo > 0.5:
+                epos = epos * (0.5 / modulo)  # Escala el vector para que su módulo sea 0.1
+
+            
+            
+            theta= self._q[0]+np.pi/2
+            rotation_matrix = np.array([
+                [np.cos(theta), -np.sin(theta), 0],
+                [np.sin(theta),  np.cos(theta), 0],
+                [0,0,1]
+            ])
+            eo = rotation_matrix @ np.array([0.00,-0.1,-0.08])
+            
+            eorien = (xdes+eo) - self.tLEndEfector
+            
             errors = [
-                xdes - self.tLWrist,
+                epos,
+                10*eorien,
             ]
             
-            
-            if np.linalg.norm(errors[0])<epsilon[0]:
+            #print(errors[1])
+            #print(np.linalg.norm(errors[1])<epsilon[1])
+            if np.linalg.norm(errors[0])<epsilon[0] and np.linalg.norm(errors[1]*0.1)<epsilon[1]:
                 break
-
+            
+                
+            jOri = self.jLEndEfector
+            #jOri[:,:3] = 0
+            #print(jOri)
             J_tasks = [
                 self.jLWrist,
+                jOri,
             ]
-            
+
+
             qd = self.generalized_task_augmentation(J_tasks, errors)
             #print(f'valores q actuales: {self._q}')
             self._q += 0.1*qd
