@@ -1,2 +1,2 @@
 from .dhParameters import *
-from .robot import *
+from .robotv2 import *

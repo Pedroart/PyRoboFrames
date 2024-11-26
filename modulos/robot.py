@@ -285,7 +285,7 @@ class robot:
     @timeit
     def ikine_task(self,xdes,send = None):
         epsilon = 0.001 # Tolerancia para la convergencia
-        max_iter = 100  # Número máximo de iteraciones
+        max_iter = 1000  # Número máximo de iteraciones
         
         qin = self._q.astype(float) 
         print(qin)
@@ -296,21 +296,28 @@ class robot:
 
             e_pos = xdes - self.tLWrist
             e_securiti = np.array([0,0, 0.5 - self.tLElbow[2]])
-            error = np.concatenate((e_pos,e_securiti))
 
-            J_tasks = [self.jLWrist,self.jLElbow]
-            errors = [e_pos,e_securiti]
-            q, qd = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=0.01)
+            print(e_securiti)
+            if np.linalg.norm(e_pos) < epsilon and e_securiti<0.5:
+                print('Error Minimo')
+                break
+
+            J_tasks = [
+                self.jLWrist,
+                #self.jLElbow,
+            ]
+            errors = [
+                e_pos,
+                #e_securiti,
+            ]
+            q, qd = self.generalized_task_augmentation(q, J_tasks, errors, deltaT=0.1)
             self._q = q
             self.update()
 
             
-            if np.linalg.norm(error) < epsilon:
-                print('Error Minimo')
-                break
         
-        self._q = self.shortest_angular_distances(qin,self._q)
-        self.update()
+        #self._q = self.shortest_angular_distances(qin,self._q)
+        #self.update()
 
         if send is not None:
             send(self._q) 

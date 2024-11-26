@@ -25,8 +25,8 @@ if __name__ == "__main__":
 
 
     UR5 = robot(dh_params,q_lim)
-
-    UR5.ikine_task(np.array([-0.79,-0.19,-0.005, 0, 1, 0, 0]))
+    
+    UR5.ikine_task(np.array([-0.79,-0.19,-0.005]))
 
 '''    RPYDES = np.array([0,0,1.57])
     XYZDES = np.array([-0.70,-0.19,-0.005])
