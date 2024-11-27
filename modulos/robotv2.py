@@ -108,10 +108,10 @@ class robot:
 
         return q_dot
 
-    #@timeit
+    @timeit
     def ikine_task(self,xdes,funSend = None):
         epsilon = [1e-3,1e-3] # Tolerancia para la convergencia
-        max_iter = 1000  # Número máximo de iteraciones
+        max_iter = 100  # Número máximo de iteraciones
         
         for i in range(max_iter):
             

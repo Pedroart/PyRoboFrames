@@ -285,7 +285,7 @@ class robot:
     @timeit
     def ikine_task(self,xdes,send = None):
         epsilon = 0.001 # Tolerancia para la convergencia
-        max_iter = 1000  # Número máximo de iteraciones
+        max_iter = 100  # Número máximo de iteraciones
         
         qin = self._q.astype(float) 
         print(qin)
