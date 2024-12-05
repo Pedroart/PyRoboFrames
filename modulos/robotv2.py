@@ -110,7 +110,7 @@ class robot:
 
     @timeit
     def ikine_task(self,xdes,funSend = None):
-        epsilon = [1e-3,1e-3] # Tolerancia para la convergencia
+        epsilon = [1e-4,1e-3] # Tolerancia para la convergencia
         max_iter = 30  # Número máximo de iteraciones
         
         for i in range(max_iter):
@@ -119,9 +119,9 @@ class robot:
             epos = xdes - self.tLWrist
 
             # Limitar el módulo a 0.1
-            modulo = np.linalg.norm(epos)  # Calcula el módulo
-            if modulo > 0.5:
-                epos = epos * (0.5 / modulo)  # Escala el vector para que su módulo sea 0.1
+            #modulo = np.linalg.norm(epos)  # Calcula el módulo
+            #if modulo > 0.5:
+            #    epos = epos * (0.5 / modulo)  # Escala el vector para que su módulo sea 0.1
 
             
             
@@ -157,7 +157,7 @@ class robot:
 
             qd = self.generalized_task_augmentation(J_tasks, errors)
             #print(f'valores q actuales: {self._q}')
-            self._q += 0.1*qd
+            self._q += 0.5*qd
             #print(f'valores q estimado: {self._q}')
             self.update()
         
